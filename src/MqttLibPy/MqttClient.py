@@ -11,7 +11,7 @@ from .serializer import Serializer
 
 class MqttClient:
 
-    def __init__(self, hostname: str, port: str, prefix: str="", postfix: str="", uuid=""):
+    def __init__(self, hostname: str, port: str, prefix: str = "", postfix: str = "", uuid=""):
         self.prefix = prefix
         self.postfix = postfix
         self.uuid = uuid
@@ -28,24 +28,25 @@ class MqttClient:
                 client.subscribe(route)
 
         self.client.on_connect = _on_connect
-        print(f"Connecting to {hostname}:{port}")
-        self.client.connect(hostname, port)
 
         self.logger = getLogger("Mqtt Client")
 
-    def send_message(self, route: str, payload: dict):
-        topic = f'{self.prefix}{route}{self.postfix}'
-
-        self.logger.info(f'Sending message to {topic}')
+    def send_message(self, topic: str, payload: dict):
+        print(f'Sending message to {topic}')
         json_payload = json.dumps(payload)
 
         self._send_string(topic, json_payload)
 
     def send_message_serialized(self, message: Union[list[dict], str], route,
                                 encodeb64: bool = False, valid_json=False, error=False):
-        json_messages = Serializer().serialize(message, self.uuid, encodeb64, valid_json, is_error=error)
-
-        print(f"Sending {json_messages}")
+        """
+        :param message: List of dicts or string to send.
+        :param route: topic to send message to
+        :param encodeb64: Not implemented
+        :param valid_json: Indicates "message" is a valid parsable json (list[dict])
+        :param error: Indicates this is an error message
+        """
+        json_messages = Serializer().serialize(message, encodeb64, valid_json, is_error=error)
 
         for serialized_message in json_messages:
             self.send_message(route, serialized_message)
@@ -55,10 +56,13 @@ class MqttClient:
 
     def register_route(self, route, callback):
         topic = f'{self.prefix}{route}{self.postfix}'
+        self.routes.append(topic)
         print(f"Listening to topic: {topic}")
         self.client.message_callback_add(topic, callback)
 
     def listen(self):
+        print(f"Connecting to {self.hostname}:{self.port}")
+        self.client.connect(self.hostname, self.port)
         self.client.loop_forever()
 
     @staticmethod
@@ -67,11 +71,18 @@ class MqttClient:
         return client, _, parsed_message
 
     def endpoint(self, route: str, force_json=False):
+        """
+        :param route: part of the route to listen to, the final route will be of the form {prefix}{route}{postfix}
+        :param force_json: The message payload is in json format, and will be passed to the callback as a dict
+        :return:
+        """
         def decorator(func):
+
             def wrapper(client: Client, _, message):
                 print("Running wrapper!")
                 parsed_message = json.loads(Serializer.decode_bytes(message.payload))
                 return func(client, _, parsed_message)
+
             if force_json:
                 self.register_route(route, wrapper)
             else:

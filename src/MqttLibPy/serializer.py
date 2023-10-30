@@ -17,9 +17,9 @@ class Serializer:
 
     def __init__(self):
         # Pasar esto a la db
-        self.id = uuid4()
+        self.id = str(uuid4())
 
-    def serialize(self, message: Union[str, list[dict]], uuid: str, encodeb64: bool = False,
+    def serialize(self, message: Union[str, list[dict]], encodeb64: bool = False,
                   valid_json=False, is_error=False, token="") -> list[dict]:
         if encodeb64 and not valid_json:
             if isinstance(message, list):
@@ -52,7 +52,7 @@ class Serializer:
             "encoding": "b64 utf-8" if encodeb64 else False,
             "error": is_error,
             "token": token,
-            "from": uuid
+            "from": self.id
         } for n, fragment in enumerate(fragments)]
 
     def deserialize(self, message: str):
