@@ -11,8 +11,11 @@ from .serializer import Serializer
 
 class MqttClient:
 
-    def __init__(self, postfix: str, hostname: str, port: str):
-        self.server = postfix
+    def __init__(self, hostname: str, port: str, prefix: str="", postfix: str="", uuid=""):
+        self.prefix = prefix
+        self.postfix = postfix
+        self.uuid = uuid
+
         self.hostname = hostname
         self.port = port
 
@@ -31,7 +34,7 @@ class MqttClient:
         self.logger = getLogger("Mqtt Client")
 
     def send_message(self, route: str, payload: dict):
-        topic = f'{route}/{self.server}'
+        topic = f'{self.prefix}{route}{self.postfix}'
 
         self.logger.info(f'Sending message to {topic}')
         json_payload = json.dumps(payload)
@@ -40,7 +43,7 @@ class MqttClient:
 
     def send_message_serialized(self, message: Union[list[dict], str], route,
                                 encodeb64: bool = False, valid_json=False, error=False):
-        json_messages = Serializer().serialize(message, self.server, encodeb64, valid_json, is_error=error)
+        json_messages = Serializer().serialize(message, self.uuid, encodeb64, valid_json, is_error=error)
 
         print(f"Sending {json_messages}")
 
@@ -51,7 +54,7 @@ class MqttClient:
         single(topic, payload, hostname=self.hostname, port=self.port, protocol=MQTTv5)
 
     def register_route(self, route, callback):
-        topic = f"{route}/{self.server}"
+        topic = f'{self.prefix}{route}{self.postfix}'
         print(f"Listening to topic: {topic}")
         self.client.message_callback_add(topic, callback)
 
