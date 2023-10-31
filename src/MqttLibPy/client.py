@@ -80,7 +80,7 @@ class MqttClient:
 
             def wrapper(client: Client, _, message):
                 parsed_message = json.loads(Serializer.decode_bytes(message.payload))
-                return func(client, _, parsed_message)
+                return func(client, _, parsed_message['data'])
 
             if force_json:
                 self.register_route(route, wrapper)

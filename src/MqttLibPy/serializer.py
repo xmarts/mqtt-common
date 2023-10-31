@@ -3,7 +3,6 @@ import json as jsn
 import base64
 import re
 
-from uuid import UUID, uuid4
 from textwrap import wrap
 from typing import Union
 
@@ -15,9 +14,9 @@ class Serializer:
     # Almost max 32bit signed int value
     _MAX_SEQ = 2147483640
 
-    def __init__(self):
+    def __init__(self, uuid: str):
         # Pasar esto a la db
-        self.id = str(uuid4())
+        self.id = uuid
 
     def serialize(self, message: Union[str, list[dict]], encodeb64: bool = False,
                   valid_json=False, is_error=False, token="") -> list[dict]:
