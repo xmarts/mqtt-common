@@ -79,7 +79,6 @@ class MqttClient:
         def decorator(func):
 
             def wrapper(client: Client, _, message):
-                print("Running wrapper!")
                 parsed_message = json.loads(Serializer.decode_bytes(message.payload))
                 return func(client, _, parsed_message)
 
