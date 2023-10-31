@@ -46,7 +46,7 @@ class MqttClient:
         :param valid_json: Indicates "message" is a valid parsable json (list[dict])
         :param error: Indicates this is an error message
         """
-        json_messages = Serializer().serialize(message, encodeb64, valid_json, is_error=error)
+        json_messages = Serializer(self.uuid).serialize(message, encodeb64, valid_json, is_error=error)
 
         for serialized_message in json_messages:
             self.send_message(route, serialized_message)
