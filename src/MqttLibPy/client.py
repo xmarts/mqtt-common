@@ -11,7 +11,7 @@ from .serializer import Serializer
 
 class MqttClient:
 
-    def __init__(self, hostname: str, port: str, prefix: str = "", postfix: str = "", uuid=""):
+    def __init__(self, hostname: str, port: int, prefix: str = "", postfix: str = "", uuid=""):
         self.prefix = prefix
         self.postfix = postfix
         self.uuid = uuid

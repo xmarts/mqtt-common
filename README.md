@@ -3,7 +3,8 @@
 ### Usage
 
 ```py
-from MqttLibPy import MqttClient, serializer
+from MqttLibPy.client import MqttClient
+# from MqttLibPy.serializer import Serializer
 
 # Both prefix and postfix are optional
 client = MqttClient('myhost.com', 1883, prefix="myprefix")
