@@ -22,10 +22,6 @@ class TestSerialize(unittest.TestCase):
             with open(f"/path/to/save/file/{file['data'][0]['filename']}", 'wb+') as f:
                 f.write(file['bytes'])
                 f.close()
-            del file['bytes']
-            print("Recibido:")
-            print(file)
-            file['bytes'] = ''
 
         threading.Thread(target=client.listen).start()
 
