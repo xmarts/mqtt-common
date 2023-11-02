@@ -22,5 +22,37 @@ def myendpoint(mqtt_client, _, json_body):
     client.send_message_serialized(my_response, "myendpoint", valid_json=True)
 ```
 
+#### Send file
+Sender
+```py
+client = MqttClient("myhost.com", 1883)
+client.send_file("test_bytes", "/path/to/my/file/myfile.")
+```
+
+listener
+```py
+client = MqttClient("myhost.com", 1883)
+
+@client.endpoint("test_bytes", is_file=True)
+def get_file(client, user_data, file):
+    with open(f"/path/to/save/file/{file['data'][0]['filename']}", 'wb+') as f:
+        f.write(file['bytes'])
+        f.close()
+
+threading.Thread(target=client.listen).start()
+```
+
+
 ### Changelog
 
+1.0.3
+* Fix bug where file metadata would get overwritten if metadata arrived after the file
+
+1.0.2
+* Fix bug that caused bytes to be empty if metadata arrived after the file
+
+1.0.1
+* Fix serializer crash with json objects
+
+1.0.0
+* Adds send file method

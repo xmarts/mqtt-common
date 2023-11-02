@@ -50,7 +50,7 @@ class Serializer:
         current_seq = self.seq
 
         return [{
-            "data": fragment if message_type is not "file" else
+            "data": fragment if message_type != "file" else
             [{"filename": filename or hashlib.md5(fragment).hexdigest()}],
             "seq": current_seq,
             "current_fragment": n,
@@ -62,7 +62,7 @@ class Serializer:
             "error": is_error,
             "token": token,
             "type": message_type,
-            "md5_hash": hashlib.md5(fragment).hexdigest(),
+            "md5_hash": "" if message_type != "file" else hashlib.md5(fragment).hexdigest(),
             "from": self.id
         } for n, fragment in enumerate(fragments)]
 

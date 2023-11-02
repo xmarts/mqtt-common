@@ -1,9 +1,6 @@
 import unittest
 
 from random import randbytes
-from uuid import uuid4
-
-from src.MqttLibPy.serializer import Serializer
 from src.MqttLibPy.client import MqttClient
 
 import threading

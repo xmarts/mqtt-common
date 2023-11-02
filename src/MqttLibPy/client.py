@@ -126,13 +126,11 @@ class MqttClient:
                     return
 
                 if parsed_message['md5_hash'] in self.files:
-                    self.files[parsed_message['md5_hash']] = {
-                        'md5_hash': parsed_message['md5_hash'],
-                        'filename': parsed_message['data'][0]['filename'],
-                        'from': parsed_message['from'],
-                        'bytes': b'',
-                        'data': parsed_message['data']
-                    }
+                    # Metadata arrived late
+                    self.files[parsed_message['md5_hash']]['md5_hash'] = parsed_message['md5_hash']
+                    self.files[parsed_message['md5_hash']]['filename'] = parsed_message['data'][0]['filename']
+                    self.files[parsed_message['md5_hash']]['from'] = parsed_message['from']
+                    self.files[parsed_message['md5_hash']]['data'] = parsed_message['data']
                     func(client, user_data, parsed_message['md5_hash'])
                     del self.files[parsed_message['md5_hash']]['bytes']
                 else:
