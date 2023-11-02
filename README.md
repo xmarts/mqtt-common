@@ -21,3 +21,6 @@ def myendpoint(mqtt_client, _, json_body):
     # Sends message to topic "myendpoint"
     client.send_message_serialized(my_response, "myendpoint", valid_json=True)
 ```
+
+### Changelog
+
