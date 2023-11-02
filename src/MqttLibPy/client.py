@@ -88,12 +88,11 @@ class MqttClient:
         parsed_message = json.loads(Serializer.decode_bytes(message.payload))
         return client, _, parsed_message
 
-    def endpoint(self, route: str, force_json=False, is_file=False, file_path=''):
+    def endpoint(self, route: str, force_json=False, is_file=False):
         """
         :param route: part of the route to listen to, the final route will be of the form {prefix}{route}{suffix}
         :param force_json: The message payload is in json format, and will be passed to the callback as a dict
         :param is_file: Indicates if the type of payload is a bytes object
-        :param file_path: Path to save files if is_file is True
         :return:
         """
         def decorator(func):
@@ -110,6 +109,9 @@ class MqttClient:
                 else:
                     # File arrived before the metadata, this shouldn't happen
                     self.logger.warning(f"File arrived before metadata. Hash: {md5_hash}")
+                    self.files[md5_hash] = {}
+                    self.files[md5_hash]['bytes'] = file_bytes
+                    return
 
                 func(client, user_data, self.files[md5_hash])
 
@@ -118,23 +120,33 @@ class MqttClient:
 
             def wrapper_files_metadata(client: Client, user_data, message):
                 parsed_message = json.loads(Serializer.decode_bytes(message.payload))
-                if parsed_message['type'] is not 'file':
+
+                if parsed_message['type'] != 'file':
                     self.logger.warning(f"A message of type {parsed_message['type']} was received on a file endpoint")
                     return
 
-                self.files[parsed_message['md5_hash']] = {
-                                                            'md5_hash': parsed_message['md5_hash'],
-                                                            'filename': parsed_message['data']['filename'],
-                                                            'from': parsed_message['from'],
-                                                            'bytes': b'',
-                                                            'data': parsed_message['data']
-                                                          }
+                if parsed_message['md5_hash'] in self.files:
+                    self.files[parsed_message['md5_hash']] = {
+                        'md5_hash': parsed_message['md5_hash'],
+                        'filename': parsed_message['data'][0]['filename'],
+                        'from': parsed_message['from'],
+                        'bytes': b'',
+                        'data': parsed_message['data']
+                    }
+                    func(client, user_data, parsed_message['md5_hash'])
+                    del self.files[parsed_message['md5_hash']]['bytes']
+                else:
+                    self.files[parsed_message['md5_hash']] = {
+                                                                'md5_hash': parsed_message['md5_hash'],
+                                                                'filename': parsed_message['data'][0]['filename'],
+                                                                'from': parsed_message['from'],
+                                                                'bytes': b'',
+                                                                'data': parsed_message['data']
+                                                              }
 
             if force_json:
                 self.register_route(route, wrapper_json)
             elif is_file:
-                if not file_path:
-                    raise Exception("File endpoints require a file_path to be provided")
                 self.register_route(route, wrapper_files_metadata)
                 self.register_route(f"{route}/file", wrapper_files)
             else:
