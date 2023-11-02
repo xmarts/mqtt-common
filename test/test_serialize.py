@@ -12,9 +12,6 @@ import threading
 class TestSerialize(unittest.TestCase):
 
     def test_serialize_bytes(self):
-        serializer = Serializer(str(uuid4()))
-        serializer.MAX_MESSAGE_LENGTH = 5 * 1000 * 1000  # 5 MBs
-        # message = self._get_n_mb(5)
         client = MqttClient("mybroker.com", 1883)
 
         @client.endpoint("test_bytes", is_file=True)
