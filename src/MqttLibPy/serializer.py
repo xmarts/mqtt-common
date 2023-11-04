@@ -20,7 +20,7 @@ class Serializer:
         self.id = uuid
 
     def serialize(self, message: Union[str, list[dict], bytes], encodeb64: bool = False,
-                  valid_json=False, is_error=False, token="", filename: str = "") -> list[dict]:
+                  valid_json=False, is_error=False, token="", filename: str = "", metadata: dict = None) -> list[dict]:
         if encodeb64 and not valid_json and not isinstance(message, bytes):
             if isinstance(message, list):
                 message = json.dumps(message)
@@ -33,6 +33,9 @@ class Serializer:
         elif isinstance(message, bytes):
             if len(message) > self.MAX_MESSAGE_LENGTH:
                 raise Exception(f"Max payload size exceeded ({self.MAX_MESSAGE_LENGTH}B)")
+            if metadata is None:
+                metadata = {}
+            metadata.update({"filename": filename or hashlib.md5(message).hexdigest()})
             fragments = [message]
             message_type = "file"
         elif isinstance(message, list) and valid_json:
@@ -50,8 +53,7 @@ class Serializer:
         current_seq = self.seq
 
         return [{
-            "data": fragment if message_type != "file" else
-            [{"filename": filename or hashlib.md5(fragment).hexdigest()}],
+            "data": fragment if message_type != "file" else [metadata],
             "seq": current_seq,
             "current_fragment": n,
             "total_fragments": len(fragments),

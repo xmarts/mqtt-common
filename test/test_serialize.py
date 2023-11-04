@@ -1,25 +1,31 @@
+import time
 import unittest
+import threading
 
 from random import randbytes
 from src.MqttLibPy.client import MqttClient
-
-import threading
 
 
 class TestSerialize(unittest.TestCase):
 
     def test_serialize_bytes(self):
-        client = MqttClient("mybroker.com", 1883)
+        downloads_folder = "/path/to/folder"
+        file_path = "/path/to/file"
+        broker_url = "mybroker.com"
+
+        client = MqttClient(broker_url, 1883)
 
         @client.endpoint("test_bytes", is_file=True)
         def get_file(client, user_data, file):
-            with open(f"/path/to/save/file/{file['data'][0]['filename']}", 'wb+') as f:
+            with open(f"{downloads_folder}/{file['filename']}", 'wb+') as f:
                 f.write(file['bytes'])
                 f.close()
 
         threading.Thread(target=client.listen).start()
 
-        client.send_file("test_bytes", "/path/to/my/file/myfile.mov")
+        client.send_file("test_bytes", file_path)
+        time.sleep(20)
+        client.send_file("test_bytes", file_path)
 
     def _get_n_mb(self, mbs: int):
         return randbytes(mbs * 1000 * 1000)

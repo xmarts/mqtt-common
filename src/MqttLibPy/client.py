@@ -57,20 +57,25 @@ class MqttClient:
         print(f"Sending string to {topic}")
         single(topic, payload, hostname=self.hostname, port=self.port, protocol=MQTTv5)
 
-    def send_bytes(self, message: bytes, route: str, filename: str = ''):
+    def send_bytes(self, message: bytes, route: str, filename: str = '', metadata: dict = None):
+        if metadata is None:
+            metadata = {}
+
         # Mandar la metadata por route y el archivo por route/
-        serialized_message = Serializer(self.uuid).serialize(message, filename=filename)
+        serialized_message = Serializer(self.uuid).serialize(message, filename=filename, metadata=metadata)
 
         for msg in serialized_message:
             self.send_message(route, msg)
             self._send_string(f"{route}/file", message)
 
-    def send_file(self, route: str, filepath: str):
+    def send_file(self, route: str, filepath: str, metadata: dict = None):
+        if metadata is None:
+            metadata = {}
         with open(filepath, "rb") as f:
             file_name = f.name.split("/")[-1]
             file_bytes = f.read()
         print(f"Sending {file_name} of length {len(file_bytes)}")
-        self.send_bytes(file_bytes, route, file_name)
+        self.send_bytes(file_bytes, route, file_name, metadata)
 
     def register_route(self, route, callback):
         topic = f'{self.prefix}{route}{self.suffix}'
@@ -116,7 +121,7 @@ class MqttClient:
                 func(client, user_data, self.files[md5_hash])
 
                 # Cleanup
-                del self.files[md5_hash]['bytes']
+                del self.files[md5_hash]
 
             def wrapper_files_metadata(client: Client, user_data, message):
                 parsed_message = json.loads(Serializer.decode_bytes(message.payload))
@@ -132,7 +137,7 @@ class MqttClient:
                     self.files[parsed_message['md5_hash']]['from'] = parsed_message['from']
                     self.files[parsed_message['md5_hash']]['data'] = parsed_message['data']
                     func(client, user_data, parsed_message['md5_hash'])
-                    del self.files[parsed_message['md5_hash']]['bytes']
+                    del self.files[parsed_message['md5_hash']]
                 else:
                     self.files[parsed_message['md5_hash']] = {
                                                                 'md5_hash': parsed_message['md5_hash'],

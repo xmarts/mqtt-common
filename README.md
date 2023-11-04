@@ -25,12 +25,16 @@ def myendpoint(mqtt_client, _, json_body):
 #### Send file
 Sender
 ```py
+from MqttLibPy.client import MqttClient
+
 client = MqttClient("myhost.com", 1883)
 client.send_file("test_bytes", "/path/to/my/file/myfile.")
 ```
 
 listener
 ```py
+from MqttLibPy.client import MqttClient
+
 client = MqttClient("myhost.com", 1883)
 
 @client.endpoint("test_bytes", is_file=True)
@@ -44,6 +48,12 @@ threading.Thread(target=client.listen).start()
 
 
 ### Changelog
+
+1.1.6
+* Fix bug where the same file couldnt be received multiple times
+
+1.1.0
+* Add optional metadata to file transfers
 
 1.0.3
 * Fix bug where file metadata would get overwritten if metadata arrived after the file
