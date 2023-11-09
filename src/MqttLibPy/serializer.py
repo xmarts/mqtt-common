@@ -4,6 +4,7 @@ import base64
 import re
 import hashlib
 
+from cryptography.fernet import Fernet
 from textwrap import wrap
 from typing import Union
 
@@ -11,16 +12,15 @@ from typing import Union
 class Serializer:
     _MAX_MESSAGE_LENGTH_BYTES = 10 * 1000 * 1000  # 10MB
     _MAX_MESSAGE_LENGTH = 268435448
-    _SEQ = 0
-    # Almost max 32bit signed int value
-    _MAX_SEQ = 2147483640
 
-    def __init__(self, uuid: str):
+    def __init__(self, uuid: str, key: bytes):
         # Pasar esto a la db
         self.id = uuid
+        self.fernet = Fernet(key)
 
     def serialize(self, message: Union[str, list[dict], bytes], encodeb64: bool = False,
-                  valid_json=False, is_error=False, token="", filename: str = "", metadata: dict = None) -> list[dict]:
+                  valid_json=False, is_error=False, filename: str = "",
+                  metadata: dict = None, encrypt: bool = False) -> list[dict]:
         if encodeb64 and not valid_json and not isinstance(message, bytes):
             if isinstance(message, list):
                 message = json.dumps(message)
@@ -36,7 +36,7 @@ class Serializer:
             if metadata is None:
                 metadata = {}
             metadata.update({"filename": filename or hashlib.md5(message).hexdigest()})
-            fragments = [message]
+            fragments = [json.dumps(metadata)]
             message_type = "file"
         elif isinstance(message, list) and valid_json:
             fragments = self._naive_knapsack(message)
@@ -50,25 +50,25 @@ class Serializer:
             else:
                 raise RuntimeError(f"Incorrect data type for message: {type(message)}")
 
-        current_seq = self.seq
+        if encrypt and (message_type == 'file' or valid_json):
+            # Si es file es siempre un solo fragmento
+            fragments = list(map(lambda f: self.encrypt_json(f), fragments))
+        elif encrypt and not valid_json:
+            fragments = list(map(lambda f: self.encrypt_string(f), fragments))
 
         return [{
-            "data": fragment if message_type != "file" else [metadata],
-            "seq": current_seq,
+            "data": fragment,
             "current_fragment": n,
             "total_fragments": len(fragments),
             "last_fragment": n == len(fragments) - 1,
-            "encoded": encodeb64,
             "is_valid_json": valid_json,
-            "encoding": "b64 utf-8" if encodeb64 else False,
             "error": is_error,
-            "token": token,
             "type": message_type,
-            "md5_hash": "" if message_type != "file" else hashlib.md5(fragment).hexdigest(),
+            "md5_hash": "" if message_type != "file" else hashlib.md5(message).hexdigest(),
             "from": self.id
         } for n, fragment in enumerate(fragments)]
 
-    def deserialize(self, message: str):
+    def deserialize(self, message: str, decrypt: bool = False):
         """
         Doesnt support multi part messages yet
         @param message: raw str payload
@@ -92,12 +92,6 @@ class Serializer:
         except Exception as e:
             print(f"An error has occurred during the parsing of a message {str(e)}")
 
-    @property
-    def seq(self):
-        current = Serializer._SEQ
-        Serializer._SEQ += 1
-        return current
-
     def _as_str(self, obj):
         return jsn.dumps(obj, ensure_ascii=False)
 
@@ -115,6 +109,17 @@ class Serializer:
     @staticmethod
     def decode_bytes(message):
         return message.decode("utf-8")
+
+    def encrypt_json(self, message: dict) -> str:
+        return self.encrypt_string(json.dumps(message))
+
+    def encrypt_string(self, message: str) -> str:
+        encoded_str = message.encode('utf-8')
+        encrypted_bytes = self.fernet.encrypt(encoded_str)
+        return encrypted_bytes.decode('utf-8')
+
+    def decrypt_str(self, message: str):
+        return self.fernet.decrypt(message.encode('utf-8')).decode('utf-8')
 
     def _naive_knapsack(self, objects: list[dict]) -> list[list[dict]]:
         """
@@ -148,3 +153,33 @@ class Serializer:
         pattern = r'<.*?>'
         filtered_string = re.sub(pattern, '', text)
         return filtered_string
+"""
+        if encrypt and valid_json:
+            for fragment in fragments:
+                if isinstance(fragment, list):
+                    encrypted_fragment = []
+                    for obj in fragment:
+                        str_json = json.dumps(obj)
+                        encoded_str = str_json.encode('utf-8')
+                        encrypted_bytes = self.fernet.encrypt(encoded_str)
+                        encrypted_str = encrypted_bytes.decode('utf-8')
+                        if message_type != 'file':
+                            encrypted_fragment.append(encrypted_str)
+                        else:
+                            encrypted_fragment.append(encrypted_bytes)
+                    encrypted_fragments.append(encrypted_fragment)
+                else:
+                    str_json = json.dumps(fragment)
+                    encoded_str = str_json.encode('utf-8')
+                    encrypted_bytes = self.fernet.encrypt(encoded_str)
+                    encrypted_str = encrypted_bytes.decode('utf-8')
+                    if message_type != 'file':
+                        encrypted_fragments.append(encrypted_str)
+                    else:
+                        encrypted_fragments.append(encrypted_bytes)
+        elif encrypt:
+            for fragment in fragments:
+                encrypted_fragments.append(self.encrypt_string(fragment))
+        else:
+            encrypted_fragments = fragments
+"""
