@@ -2,11 +2,11 @@ import json
 import hashlib
 
 from paho.mqtt.publish import single
-from paho.mqtt.client import MQTTv5, Client
+from paho.mqtt.client import MQTTv5, Client, MQTTMessage
 from cryptography.fernet import Fernet
 
 from logging import getLogger
-from typing import Union
+from typing import Union, Callable
 
 from .serializer import Serializer
 
@@ -14,21 +14,20 @@ from .serializer import Serializer
 class MqttClient:
 
     def __init__(self, hostname: str, port: int, prefix: str = "", suffix: str = "", uuid="",
-                 encryption_key: bytes = ''):
+                 encryption_key: bytes = '', encryption_callback: Union[Callable[[str], str], None] = None):
         self.prefix = prefix
         self.suffix = suffix
         self.uuid = uuid
 
         self.hostname = hostname
         self.port = port
-        self.fernet: Union[Fernet, None] = None
-        if encryption_key:
-            self.fernet = Fernet(encryption_key)
+        self.encryption_key = encryption_key
+        if encryption_callback:
+            self.encryption_callback = encryption_callback
 
         self.routes = []
         self.files = {}
 
-        self.serializer = Serializer(uuid, encryption_key)
         self.client = Client("", userdata=None, protocol=MQTTv5)
 
         def _on_connect(client: Client, _, __, ___, ____):
@@ -54,7 +53,7 @@ class MqttClient:
         :param valid_json: Indicates "message" is a valid parsable json (list[dict])
         :param error: Indicates this is an error message
         """
-        json_messages = self.serializer.serialize(message, encodeb64, valid_json, is_error=error, encrypt=secure)
+        json_messages = Serializer(self.uuid, self.encryption_key or self.encryption_callback(route)).serialize(message, encodeb64, valid_json, is_error=error, encrypt=secure)
 
         for serialized_message in json_messages:
             self.send_message(route, serialized_message)
@@ -68,12 +67,13 @@ class MqttClient:
             metadata = {}
 
         # Mandar la metadata por route y el archivo por route/
-        serialized_message = self.serializer.serialize(message, filename=filename, metadata=metadata, encrypt=secure)
+        serialized_message = (Serializer(self.uuid, self.encryption_key or self.encryption_callback(route))
+                              .serialize(message, filename=filename, metadata=metadata, encrypt=secure))
 
         for msg in serialized_message:
-            if self.fernet is not None and secure:
-                message = self.fernet.encrypt(message)
-            elif secure and self.fernet is None:
+            if secure and (self.encryption_key or self.encryption_callback):
+                message = self._get_fernet(route).encrypt(message)
+            elif secure:
                 raise Exception("No encryption key was provided to the client in order to send an encrypted message")
 
             self.send_message(route, msg)
@@ -108,18 +108,17 @@ class MqttClient:
         :return:
         """
         def decorator(func):
-            if secure and self.fernet is None:
-                raise Exception("No encryption key was provided to the client in order to register a secure route")
-
-            def wrapper_json(client: Client, _, message):
+            def wrapper_json(client: Client, _, message: MQTTMessage):
                 parsed_message = json.loads(message.payload)
                 if secure:
-                    parsed_message['data'] = self.serializer.decrypt_str(parsed_message['data'])
+                    parsed_message['data'] = (Serializer(self.uuid,
+                                                         self.encryption_key or self.encryption_callback(message.topic))
+                                              .decrypt_str(parsed_message['data']))
                 return func(client, _, parsed_message['data'])
 
             def wrapper_files(client: Client, user_data, message):
                 if secure:
-                    file_bytes = self.fernet.decrypt(message.payload)
+                    file_bytes = self._get_fernet(message.topic).decrypt(message.payload)
                 else:
                     file_bytes = message.payload
                 md5_hash = hashlib.md5(file_bytes).hexdigest()
@@ -140,9 +139,9 @@ class MqttClient:
             def wrapper_files_metadata(client: Client, user_data, message):
                 parsed_message = json.loads(message.payload)
                 if secure:
-                    bytes_json = self.fernet.decrypt(parsed_message['data'].encode('utf-8'))
+                    bytes_json = self._get_fernet(message.topic).decrypt(parsed_message['data'].encode('utf-8'))
                     string_json = bytes_json.decode('utf-8')
-                    parsed_message['data'] = string_json
+                    parsed_message['data'] = json.loads(string_json)
                 parsed_message['data'] = json.loads(parsed_message['data'])
 
                 if parsed_message['type'] != 'file':
@@ -180,3 +179,7 @@ class MqttClient:
             return inner
 
         return decorator
+
+    def _get_fernet(self, topic: str) -> Union[None, Fernet]:
+        key = self.encryption_key or self.encryption_callback(topic)
+        return Fernet(key)
