@@ -13,10 +13,11 @@ class Serializer:
     _MAX_MESSAGE_LENGTH_BYTES = 10 * 1000 * 1000  # 10MB
     _MAX_MESSAGE_LENGTH = 268435448
 
-    def __init__(self, uuid: str, key: bytes):
+    def __init__(self, uuid: str, key: bytes = None):
         # Pasar esto a la db
         self.id = uuid
-        self.fernet = Fernet(key)
+        if key is not None:
+            self.fernet = Fernet(key)
 
     def serialize(self, message: Union[str, list[dict], bytes], encodeb64: bool = False,
                   valid_json=False, is_error=False, filename: str = "",

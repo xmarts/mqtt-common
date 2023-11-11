@@ -6,15 +6,20 @@ from paho.mqtt.client import MQTTv5, Client, MQTTMessage
 from cryptography.fernet import Fernet
 
 from logging import getLogger
-from typing import Union, Callable
+from typing import Union, Callable, TypeAlias
 
 from .serializer import Serializer
+
+# Types
+
+EncryptionCallback: TypeAlias = Union[Callable[[str], str], None]
 
 
 class MqttClient:
 
     def __init__(self, hostname: str, port: int, prefix: str = "", suffix: str = "", uuid="",
-                 encryption_key: bytes = '', encryption_callback: Union[Callable[[str], str], None] = None):
+                 encryption_key: bytes = '',
+                 encryption_callback: EncryptionCallback = None):
         self.prefix = prefix
         self.suffix = suffix
         self.uuid = uuid
@@ -24,6 +29,8 @@ class MqttClient:
         self.encryption_key = encryption_key
         if encryption_callback:
             self.encryption_callback = encryption_callback
+        else:
+            self.encryption_callback = None
 
         self.routes = []
         self.files = {}
@@ -53,7 +60,7 @@ class MqttClient:
         :param valid_json: Indicates "message" is a valid parsable json (list[dict])
         :param error: Indicates this is an error message
         """
-        json_messages = Serializer(self.uuid, self.encryption_key or self.encryption_callback(route)).serialize(message, encodeb64, valid_json, is_error=error, encrypt=secure)
+        json_messages = Serializer(self.uuid, self.encryption_key or self.encryption_callback and self.encryption_callback(route)).serialize(message, encodeb64, valid_json, is_error=error, encrypt=secure)
 
         for serialized_message in json_messages:
             self.send_message(route, serialized_message)
@@ -67,7 +74,7 @@ class MqttClient:
             metadata = {}
 
         # Mandar la metadata por route y el archivo por route/
-        serialized_message = (Serializer(self.uuid, self.encryption_key or self.encryption_callback(route))
+        serialized_message = (Serializer(self.uuid, self.encryption_key or self.encryption_callback and self.encryption_callback(route))
                               .serialize(message, filename=filename, metadata=metadata, encrypt=secure))
 
         for msg in serialized_message:
@@ -112,7 +119,9 @@ class MqttClient:
                 parsed_message = json.loads(message.payload)
                 if secure:
                     parsed_message['data'] = (Serializer(self.uuid,
-                                                         self.encryption_key or self.encryption_callback(message.topic))
+                                                         self.encryption_key
+                                                         or self.encryption_callback
+                                                         and self.encryption_callback(message.topic))
                                               .decrypt_str(parsed_message['data']))
                 return func(client, _, parsed_message['data'])
 
