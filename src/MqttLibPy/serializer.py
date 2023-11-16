@@ -65,6 +65,7 @@ class Serializer:
             "is_valid_json": valid_json,
             "error": is_error,
             "type": message_type,
+            "encrypted": encrypt,
             "md5_hash": "" if message_type != "file" else hashlib.md5(message).hexdigest(),
             "from": self.id
         } for n, fragment in enumerate(fragments)]
