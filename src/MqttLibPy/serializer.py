@@ -70,7 +70,7 @@ class Serializer:
             "from": self.id
         } for n, fragment in enumerate(fragments)]
 
-    def deserialize(self, message: str, decrypt: bool = False):
+    def deserialize(self, message: str):
         """
         Doesnt support multi part messages yet
         @param message: raw str payload
@@ -155,33 +155,3 @@ class Serializer:
         pattern = r'<.*?>'
         filtered_string = re.sub(pattern, '', text)
         return filtered_string
-"""
-        if encrypt and valid_json:
-            for fragment in fragments:
-                if isinstance(fragment, list):
-                    encrypted_fragment = []
-                    for obj in fragment:
-                        str_json = json.dumps(obj)
-                        encoded_str = str_json.encode('utf-8')
-                        encrypted_bytes = self.fernet.encrypt(encoded_str)
-                        encrypted_str = encrypted_bytes.decode('utf-8')
-                        if message_type != 'file':
-                            encrypted_fragment.append(encrypted_str)
-                        else:
-                            encrypted_fragment.append(encrypted_bytes)
-                    encrypted_fragments.append(encrypted_fragment)
-                else:
-                    str_json = json.dumps(fragment)
-                    encoded_str = str_json.encode('utf-8')
-                    encrypted_bytes = self.fernet.encrypt(encoded_str)
-                    encrypted_str = encrypted_bytes.decode('utf-8')
-                    if message_type != 'file':
-                        encrypted_fragments.append(encrypted_str)
-                    else:
-                        encrypted_fragments.append(encrypted_bytes)
-        elif encrypt:
-            for fragment in fragments:
-                encrypted_fragments.append(self.encrypt_string(fragment))
-        else:
-            encrypted_fragments = fragments
-"""

@@ -1,2 +1,4 @@
 paho-mqtt
 cryptography
+psycopg2
+

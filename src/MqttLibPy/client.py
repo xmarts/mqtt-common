@@ -1,25 +1,24 @@
 import json
 import hashlib
+import traceback
+
+from psycopg2 import InterfaceError
 
 from paho.mqtt.publish import single
 from paho.mqtt.client import MQTTv5, Client, MQTTMessage
 from cryptography.fernet import Fernet
 
 from logging import getLogger
-from typing import Union, Callable, TypeAlias
+from typing import Union
 
 from .serializer import Serializer
-
-# Types
-
-EncryptionCallback: TypeAlias = Union[Callable[[str], str], None]
 
 
 class MqttClient:
 
     def __init__(self, hostname: str, port: int, prefix: str = "", suffix: str = "", uuid="",
                  encryption_key: bytes = '',
-                 encryption_callback: EncryptionCallback = None):
+                 encryption_callback = None):
         self.prefix = prefix
         self.suffix = suffix
         self.uuid = uuid
@@ -106,73 +105,100 @@ class MqttClient:
         self.client.connect(self.hostname, self.port)
         self.client.loop_forever()
 
-    def endpoint(self, route: str, force_json=False, is_file=False, secure=False):
+    def endpoint(self, route: str, force_json=False, is_file=False, secure=False, endpoint_encryption_callback=None):
         """
         :param route: part of the route to listen to, the final route will be of the form {prefix}{route}{suffix}
         :param force_json: The message payload is in json format, and will be passed to the callback as a dict
         :param is_file: Indicates if the type of payload is a bytes object
         :param secure: Whether to decrypt payloads with the provided key or not
+        :param endpoint_encryption_callback: Custom encryption callback for this specific endpoint
         :return:
         """
         def decorator(func):
             def wrapper_json(client: Client, _, message: MQTTMessage):
-                parsed_message = json.loads(message.payload)
-                if secure:
-                    parsed_message['data'] = (Serializer(self.uuid,
-                                                         self.encryption_key
-                                                         or self.encryption_callback
-                                                         and self.encryption_callback(message.topic))
-                                              .decrypt_str(parsed_message['data']))
-                return func(client, _, parsed_message['data'])
+                try:
+                    parsed_message = json.loads(message.payload)
+                    encryption_key = (self.encryption_key or self.encryption_callback
+                                      and self.encryption_callback(message.topic))
+                    if endpoint_encryption_callback:
+                        encryption_key = endpoint_encryption_callback(message.topic)
+                    if secure:
+                        parsed_message['data'] = (Serializer(self.uuid, encryption_key)
+                                                  .decrypt_str(parsed_message['data']))
+                        parsed_message['data'] = json.loads(parsed_message['data'])
+                    return func(client, _, parsed_message['data'])
+                except InterfaceError as e:
+                    self.logger.error(f"Error in json endpoint {route}")
+                    self.logger.error(e)
+                    tb = traceback.format_exc()
+                    self.logger.error(tb)
+                    raise InterfaceError("Database error, re initializing cursor")
+                except Exception as e:
+                    self.logger.error(f"Error in json endpoint {route}")
+                    self.logger.error(e)
+                    tb = traceback.format_exc()
+                    self.logger.error(tb)
 
             def wrapper_files(client: Client, user_data, message):
-                if secure:
-                    file_bytes = self._get_fernet(message.topic).decrypt(message.payload)
-                else:
-                    file_bytes = message.payload
-                md5_hash = hashlib.md5(file_bytes).hexdigest()
-                if md5_hash in self.files:
-                    self.files[md5_hash]['bytes'] = file_bytes
-                else:
-                    # File arrived before the metadata, this shouldn't happen
-                    self.logger.warning(f"File arrived before metadata. Hash: {md5_hash}")
-                    self.files[md5_hash] = {}
-                    self.files[md5_hash]['bytes'] = file_bytes
-                    return
+                try:
+                    if secure:
+                        file_bytes = self._get_fernet(message.topic).decrypt(message.payload)
+                    else:
+                        file_bytes = message.payload
+                    md5_hash = hashlib.md5(file_bytes).hexdigest()
+                    if md5_hash in self.files:
+                        self.files[md5_hash]['bytes'] = file_bytes
+                    else:
+                        # File arrived before the metadata, this shouldn't happen
+                        self.logger.warning(f"File arrived before metadata. Hash: {md5_hash}")
+                        self.files[md5_hash] = {}
+                        self.files[md5_hash]['bytes'] = file_bytes
+                        return
 
-                func(client, user_data, self.files[md5_hash])
+                    func(client, user_data, self.files[md5_hash])
 
-                # Cleanup
-                del self.files[md5_hash]
+                    # Cleanup
+                    del self.files[md5_hash]
+                except Exception as e:
+                    self.logger.error(f"Error in file endpoint {route}")
+                    self.logger.error(e)
+                    tb = traceback.format_exc()
+                    self.logger.error(tb)
 
             def wrapper_files_metadata(client: Client, user_data, message):
-                parsed_message = json.loads(message.payload)
-                if secure:
-                    bytes_json = self._get_fernet(message.topic).decrypt(parsed_message['data'].encode('utf-8'))
-                    string_json = bytes_json.decode('utf-8')
-                    parsed_message['data'] = json.loads(string_json)
-                parsed_message['data'] = json.loads(parsed_message['data'])
+                try:
+                    parsed_message = json.loads(message.payload)
+                    if secure:
+                        bytes_json = self._get_fernet(message.topic).decrypt(parsed_message['data'].encode('utf-8'))
+                        string_json = bytes_json.decode('utf-8')
+                        parsed_message['data'] = json.loads(string_json)
+                    parsed_message['data'] = json.loads(parsed_message['data'])
 
-                if parsed_message['type'] != 'file':
-                    self.logger.warning(f"A message of type {parsed_message['type']} was received on a file endpoint")
-                    return
+                    if parsed_message['type'] != 'file':
+                        self.logger.warning(
+                            f"A message of type {parsed_message['type']} was received on a file endpoint")
+                        return
 
-                if parsed_message['md5_hash'] in self.files:
-                    # Metadata arrived late
-                    self.files[parsed_message['md5_hash']]['md5_hash'] = parsed_message['md5_hash']
-                    self.files[parsed_message['md5_hash']]['filename'] = parsed_message['data']['filename']
-                    self.files[parsed_message['md5_hash']]['from'] = parsed_message['from']
-                    self.files[parsed_message['md5_hash']]['data'] = parsed_message['data']
-                    func(client, user_data, parsed_message['md5_hash'])
-                    del self.files[parsed_message['md5_hash']]
-                else:
-                    self.files[parsed_message['md5_hash']] = {
-                                                                'md5_hash': parsed_message['md5_hash'],
-                                                                'filename': parsed_message['data']['filename'],
-                                                                'from': parsed_message['from'],
-                                                                'bytes': b'',
-                                                                'data': parsed_message['data']
-                                                              }
+                    if parsed_message['md5_hash'] in self.files:
+                        # Metadata arrived late
+                        self.files[parsed_message['md5_hash']]['md5_hash'] = parsed_message['md5_hash']
+                        self.files[parsed_message['md5_hash']]['filename'] = parsed_message['data']['filename']
+                        self.files[parsed_message['md5_hash']]['from'] = parsed_message['from']
+                        self.files[parsed_message['md5_hash']]['data'] = parsed_message['data']
+                        func(client, user_data, parsed_message['md5_hash'])
+                        del self.files[parsed_message['md5_hash']]
+                    else:
+                        self.files[parsed_message['md5_hash']] = {
+                            'md5_hash': parsed_message['md5_hash'],
+                            'filename': parsed_message['data']['filename'],
+                            'from': parsed_message['from'],
+                            'bytes': b'',
+                            'data': parsed_message['data']
+                        }
+                except Exception as e:
+                    self.logger.error(f"Error in metadata endpoint {route} {e}")
+                    tb = traceback.format_exc()
+                    self.logger.error(tb)
 
             if force_json:
                 self.register_route(route, wrapper_json)
