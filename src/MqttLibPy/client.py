@@ -66,7 +66,7 @@ class MqttClient:
 
     def _send_string(self, topic: str, payload: Union[str, bytes]):
         print(f"Sending string to {topic}")
-        single(topic, payload, hostname=self.hostname, port=self.port, protocol=MQTTv5)
+        single(topic, payload, hostname=self.hostname, port=self.port, protocol=MQTTv5, qos=2)
 
     def send_bytes(self, message: bytes, route: str, filename: str = '', metadata: dict = None, secure=False):
         if metadata is None:
