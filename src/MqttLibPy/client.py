@@ -18,10 +18,11 @@ class MqttClient:
 
     def __init__(self, hostname: str, port: int, prefix: str = "", suffix: str = "", uuid="",
                  encryption_key: bytes = '',
-                 encryption_callback = None):
+                 encryption_callback=None, qos=2):
         self.prefix = prefix
         self.suffix = suffix
         self.uuid = uuid
+        self.qos = qos
 
         self.hostname = hostname
         self.port = port
@@ -66,7 +67,7 @@ class MqttClient:
 
     def _send_string(self, topic: str, payload: Union[str, bytes]):
         print(f"Sending string to {topic}")
-        single(topic, payload, hostname=self.hostname, port=self.port, protocol=MQTTv5, qos=2)
+        single(topic, payload, hostname=self.hostname, port=self.port, protocol=MQTTv5, qos=self.qos)
 
     def send_bytes(self, message: bytes, route: str, filename: str = '', metadata: dict = None, secure=False):
         if metadata is None:
