@@ -6,7 +6,7 @@ import hashlib
 
 from cryptography.fernet import Fernet
 from textwrap import wrap
-from typing import Union
+from typing import Union, List
 
 
 class Serializer:
@@ -19,9 +19,9 @@ class Serializer:
         if key is not None:
             self.fernet = Fernet(key)
 
-    def serialize(self, message: Union[str, list[dict], bytes], encodeb64: bool = False,
+    def serialize(self, message: Union[str, List[dict], bytes], encodeb64: bool = False,
                   valid_json=False, is_error=False, filename: str = "",
-                  metadata: dict = None, encrypt: bool = False) -> list[dict]:
+                  metadata: dict = None, encrypt: bool = False) -> List[dict]:
         if encodeb64 and not valid_json and not isinstance(message, bytes):
             if isinstance(message, list):
                 message = json.dumps(message)
@@ -97,7 +97,7 @@ class Serializer:
     def _as_str(self, obj):
         return jsn.dumps(obj, ensure_ascii=False)
 
-    def _len(self, obj: Union[dict, list[dict]]):
+    def _len(self, obj: Union[dict, List[dict]]):
         return len(self._as_str(obj))
 
     @property
@@ -123,7 +123,7 @@ class Serializer:
     def decrypt_str(self, message: str):
         return self.fernet.decrypt(message.encode('utf-8')).decode('utf-8')
 
-    def _naive_knapsack(self, objects: list[dict]) -> list[list[dict]]:
+    def _naive_knapsack(self, objects: List[dict]) -> List[List[dict]]:
         """
         Takes a list of objects and returns a list of lists which sum of stringified
         objects are lower than self.MAX_MESSAGE_LENGTH.
@@ -148,7 +148,7 @@ class Serializer:
                 messages.append(current_message)
         return messages
 
-    def _naive_knapsack_bytes(self, objects: list[bytes]) -> list[list[bytes]]:
+    def _naive_knapsack_bytes(self, objects: List[bytes]) -> List[List[bytes]]:
         return objects
 
     def filter_html_tags(self, text: str):

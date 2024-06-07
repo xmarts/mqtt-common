@@ -9,7 +9,7 @@ from paho.mqtt.client import MQTTv5, Client, MQTTMessage
 from cryptography.fernet import Fernet
 
 from logging import getLogger
-from typing import Union
+from typing import Union, List
 
 from .serializer import Serializer
 
@@ -51,7 +51,7 @@ class MqttClient:
 
         self._send_string(topic, json_payload)
 
-    def send_message_serialized(self, message: Union[list[dict], str], route,
+    def send_message_serialized(self, message: Union[List[dict], str], route,
                                 encodeb64: bool = False, valid_json=False, error=False, secure=False):
         """
         :param message: List of dicts or string to send.
@@ -95,8 +95,12 @@ class MqttClient:
         print(f"Sending {file_name} of length {len(file_bytes)}")
         self.send_bytes(file_bytes, route, file_name, metadata, secure=secure)
 
-    def register_route(self, route, callback):
-        topic = f'{self.prefix}{route}{self.suffix}'
+    def register_route(self, route, callback, pure_route=False):
+        if not pure_route:
+            topic = f'{self.prefix}{route}{self.suffix}'
+        else:
+            topic = route
+
         self.routes.append(topic)
         print(f"Listening to topic: {topic}")
         self.client.message_callback_add(topic, callback)
@@ -106,7 +110,7 @@ class MqttClient:
         self.client.connect(self.hostname, self.port)
         self.client.loop_forever()
 
-    def endpoint(self, route: str, force_json=False, is_file=False, secure=False, endpoint_encryption_callback=None):
+    def endpoint(self, route: str, force_json=False, is_file=False, secure=False, endpoint_encryption_callback=None, pure_route=False):
         """
         :param route: part of the route to listen to, the final route will be of the form {prefix}{route}{suffix}
         :param force_json: The message payload is in json format, and will be passed to the callback as a dict
@@ -202,12 +206,12 @@ class MqttClient:
                     self.logger.error(tb)
 
             if force_json:
-                self.register_route(route, wrapper_json)
+                self.register_route(route, wrapper_json, pure_route=pure_route)
             elif is_file:
-                self.register_route(route, wrapper_files_metadata)
-                self.register_route(f"{route}/file", wrapper_files)
+                self.register_route(route, wrapper_files_metadata, pure_route=pure_route)
+                self.register_route(f"{route}/file", wrapper_files, pure_route=pure_route)
             else:
-                self.register_route(route, func)
+                self.register_route(route, func, pure_route=pure_route)
 
             def inner(*args, **kwargs):
                 pass

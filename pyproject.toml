@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "MqttLibPy"
-version = "1.4.4"
+version = "1.4.6"
 authors = [
   { name="juan pablo allende - xmarts", email="juan.allende@xmarts.com" },
 ]
 description = "A small example package"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.7"
 dependencies = [
     "paho-mqtt == 1.6.1",
     "cryptography",
