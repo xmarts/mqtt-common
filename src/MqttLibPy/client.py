@@ -177,7 +177,9 @@ class MqttClient:
                         bytes_json = self._get_fernet(message.topic).decrypt(parsed_message['data'].encode('utf-8'))
                         string_json = bytes_json.decode('utf-8')
                         parsed_message['data'] = json.loads(string_json)
-                    parsed_message['data'] = json.loads(parsed_message['data'])
+
+                    if not isinstance(parsed_message['data'], dict):
+                        parsed_message['data'] = json.loads(parsed_message['data'])
 
                     if parsed_message['type'] != 'file':
                         self.logger.warning(
@@ -190,7 +192,7 @@ class MqttClient:
                         self.files[parsed_message['md5_hash']]['filename'] = parsed_message['data']['filename']
                         self.files[parsed_message['md5_hash']]['from'] = parsed_message['from']
                         self.files[parsed_message['md5_hash']]['data'] = parsed_message['data']
-                        func(client, user_data, parsed_message['md5_hash'])
+                        func(client, user_data, self.files[parsed_message['md5_hash']])
                         del self.files[parsed_message['md5_hash']]
                     else:
                         self.files[parsed_message['md5_hash']] = {
